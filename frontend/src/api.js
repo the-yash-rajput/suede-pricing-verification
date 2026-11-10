@@ -16,6 +16,7 @@ export const api = {
   verifyInputs: (noCache) => call('POST', `/verify/inputs?no_cache=${!!noCache}`),
   inputs: () => call('GET', '/inputs'),
   brands: () => call('GET', '/brands'),
+  adapters: () => call('GET', '/adapters'),
   probe: (b) => call('POST', '/brands/probe', b),
   saveBrand: (b) => call('POST', '/brands', b),
   patchBrand: (id, p) => call('PATCH', `/brands/${id}`, p),

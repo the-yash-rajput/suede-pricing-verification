@@ -93,6 +93,9 @@ function Verify({ brands, prefill, onEdit }) {
         <label>Brand
           <select value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })}>
             <option value="">choose…</option>
+            {/* brand from the input file / an old result that isn't in the brands table: keep it visible */}
+            {form.brand && !brands.some((b) => b.name === form.brand) &&
+              <option value={form.brand}>{form.brand} (not onboarded)</option>}
             {brands.map((b) => <option key={b.id} value={b.name}>{b.name} ({b.approach})</option>)}
           </select>
         </label>
@@ -301,6 +304,15 @@ function Brands({ brands, reload }) {
   const [proposal, setProposal] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const [adapters, setAdapters] = useState([])
+  useEffect(() => { api.adapters().then(setAdapters).catch(() => setAdapters([])) }, [])
+  // adapter = module in backend/pricecheck/brands; empty = no_adapter (ops verifies by hand)
+  const adapterSelect = (value, onChange) => (
+    <select value={value || ''} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">none → no_adapter</option>
+      {adapters.map((a) => <option key={a}>{a}</option>)}
+    </select>
+  )
 
   const doProbe = async () => {
     setBusy(true); setErr(null); setProposal(null)
@@ -326,7 +338,7 @@ function Brands({ brands, reload }) {
             <tr key={b.id}>
               <td>{b.name}</td><td>{b.domain}</td><td><code>{b.approach}</code></td>
               <td>{b.custom_method || '—'}</td>
-              <td>{b.adapter || <span className="error">none → no_adapter</span>}</td>
+              <td>{adapterSelect(b.adapter, (adapter) => patch(b.id, { adapter }))}</td>
               <td>{b.ucp_endpoint ? 'yes' : 'no'}</td>
               <td>
                 <select value={b.status} onChange={(e) => patch(b.id, { status: e.target.value })}>
@@ -367,7 +379,8 @@ function Brands({ brands, reload }) {
                 </select>
               </label>
             )}
-            <p>Adapter: <code>{proposal.adapter || 'none yet'}</code> · UCP: {proposal.ucp_endpoint || 'no'}</p>
+            <label>Adapter{adapterSelect(proposal.adapter, (adapter) => setProposal({ ...proposal, adapter }))}</label>
+            <p>UCP: {proposal.ucp_endpoint || 'no'}</p>
             <details><summary>Probe evidence</summary><pre>{JSON.stringify(proposal.probe_evidence, null, 2)}</pre></details>
             <div className="actions"><button onClick={save}>Save brand</button></div>
           </div>

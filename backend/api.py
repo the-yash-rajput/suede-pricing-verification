@@ -4,6 +4,7 @@
 """
 import json
 import os
+import pkgutil
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -12,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from pricecheck import db
+from pricecheck import brands as brand_pkg, db
 from pricecheck.core import EVIDENCE_ROOT, Request, new_run_id
 from pricecheck.probe import probe
 from pricecheck.service import verify
@@ -87,9 +88,25 @@ async def post_probe(b: BrandIn):
     return await run_in_threadpool(probe, b.domain, b.sample_url)
 
 
+def adapters() -> list[str]:
+    return sorted(m.name for m in pkgutil.iter_modules(brand_pkg.__path__))
+
+
+def _check_adapter(name: str | None):
+    # adapter is fed to importlib in service.verify: only allow modules that exist in pricecheck/brands
+    if name and name not in adapters():
+        raise HTTPException(422, f"unknown adapter {name!r}; have {adapters()}")
+
+
+@app.get("/adapters")
+def get_adapters():
+    return adapters()
+
+
 @app.post("/brands")
 def post_brand(b: dict):
     """Save a brand (usually the probe result, possibly overridden by ops)."""
+    _check_adapter(b.get("adapter"))
     if db.get_brand(b.get("name", "")):
         raise HTTPException(409, "brand already exists")
     b.setdefault("status", "onboarding")
@@ -98,7 +115,8 @@ def post_brand(b: dict):
 
 @app.patch("/brands/{brand_id}")
 def patch_brand(brand_id: int, p: BrandPatch):
-    row = db.update_brand(brand_id, p.model_dump(exclude_none=True))
+    _check_adapter(p.adapter)
+    row = db.update_brand(brand_id, p.model_dump(exclude_unset=True))
     if not row:
         raise HTTPException(404)
     return row
