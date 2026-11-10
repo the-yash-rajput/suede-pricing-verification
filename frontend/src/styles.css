@@ -178,3 +178,7 @@ table.obs.compact .c-src { width: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .toast.busy span::before { animation: none; } }
 
+
+.ship { margin-top: 16px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.ship.ok { border-left: 3px solid var(--moss); } .ship.bad { border-left: 3px solid var(--oxblood); }
+.ship dl { grid-template-columns: 120px 1fr; font-size: 13.5px; }

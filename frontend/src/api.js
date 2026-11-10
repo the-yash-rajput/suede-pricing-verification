@@ -15,6 +15,7 @@ export const api = {
   verify: (req) => call('POST', '/verify', req),
   verifyInputs: (noCache) => call('POST', `/verify/inputs?no_cache=${!!noCache}`),
   inputs: () => call('GET', '/inputs'),
+  shipping: (req) => call('POST', '/shipping', req),
   brands: () => call('GET', '/brands'),
   adapters: () => call('GET', '/adapters'),
   probe: (b) => call('POST', '/brands/probe', b),

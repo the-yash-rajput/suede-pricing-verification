@@ -26,6 +26,8 @@ def main():
     ap.add_argument("--variant", help='JSON object of option name -> value')
     ap.add_argument("--qty", type=int, default=1)
     ap.add_argument("--no-cache", action="store_true", help="force a fresh observation")
+    ap.add_argument("--shipping", action="store_true",
+                    help="optional: guest-cart shipping quote to New York, NY 10001, qty 1 (Shopify brands only)")
     a = ap.parse_args()
 
     if a.input:
@@ -37,6 +39,20 @@ def main():
 
     db.init()
     run_id = new_run_id()
+    if a.shipping:
+        from pricecheck.shipping import quote
+        if len(reqs) != 1:
+            ap.error("--shipping takes one --brand/--url/--variant")
+        brand = db.get_brand(reqs[0].brand)
+        if not brand or brand["adapter"] != "shopify":
+            ap.error("--shipping supports onboarded Shopify brands only")
+        s = quote(reqs[0], brand, run_id)
+        print(dumps(s))
+        o = s["outcome"]
+        print(f"[SHIPPING {o['status'].upper()}] {s['brand']} -> " + (
+            f"{s['shipping_amount'] or 'see rates'} {[(x['service'], x['amount']) for x in s['rates']]}"
+            if o["status"] == "resolved" else f"{o['reason']}: {s['human_action']}"), file=sys.stderr)
+        sys.exit(0 if o["status"] == "resolved" else 2)
     results = [verify(r, no_cache=a.no_cache, run_id=run_id) for r in reqs]
     print(dumps(results if len(results) > 1 else results[0]))
     for r in results:

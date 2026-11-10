@@ -153,6 +153,29 @@ function Verify({ brands, prefill, onEdit }) {
 
 const EST_SECS = 30  // ponytail: fixed estimate from observed browser lookups; per-brand p50 if it misleads
 
+function Shipping({ s }) {
+  if (s.error) return <p className="error">{s.error}</p>
+  const ok = s.outcome.status === 'resolved'
+  return (
+    <div className={`ship ${ok ? 'ok' : 'bad'}`}>
+      <h3>Shipping to New York, NY 10001 <span className="muted">qty 1</span></h3>
+      <dl>
+        <dt>Amount</dt><dd className="num">{ok
+          ? (s.shipping_amount ? fmtMoney(s.shipping_amount, s.rates[0]?.currency) : 'several services, see below')
+          : <span className="error">unknown ({s.outcome.reason.replace(/_/g, ' ')}), not $0</span>}</dd>
+        {s.rates.length > 0 && <><dt>Service</dt><dd>{s.rates.map((x, i) =>
+          <div key={i}>{x.service} <span className="muted">{fmtMoney(x.amount, x.currency)}</span></div>)}</dd></>}
+        <dt>Applies</dt><dd>per basket <span className="muted">(cart held 1 unit; per-item not established)</span></dd>
+        <dt>Basis</dt><dd>cart-calculator quote <span className="muted">(pre-checkout, before tax)</span></dd>
+        {s.missing_fields.length > 0 && <><dt>Missing fields</dt><dd>{s.missing_fields.join(', ')}</dd></>}
+        {s.human_action && <><dt>Ops action</dt><dd>{s.human_action}</dd></>}
+        <dt>Observed</dt><dd className="num">{fmtTime(s.observation_time)} <span className="muted">{s.outcome.run_id}</span></dd>
+      </dl>
+      <Evidence items={s.evidence} />
+    </div>
+  )
+}
+
 function Pending({ job }) {
   const [secs, setSecs] = useState(0)
   useEffect(() => { const t = setInterval(() => setSecs((x) => x + 1), 1000); return () => clearInterval(t) }, [])
@@ -194,6 +217,13 @@ function Pending({ job }) {
 
 function ResultCard({ r, onRerun, onRetry, retrying, onEdit }) {
   const [raw, setRaw] = useState(false)
+  const [ship, setShip] = useState(null)   // null | 'loading' | shipping result | {error}
+  const canShip = r.source?.method === 'shopify_js' && r.outcome.status === 'resolved'
+  const checkShipping = async () => {
+    setShip('loading')
+    try { setShip(await api.shipping({ brand: r.brand, url: r.product?.url, variant: r.requested_variant.options })) }
+    catch (e) { setShip({ error: e.message }) }
+  }
   const o = r.outcome
   const pb = r.price_basis
   // same actions at the top and the bottom of the card: no scrolling past the evidence to act
@@ -202,6 +232,8 @@ function ResultCard({ r, onRerun, onRetry, retrying, onEdit }) {
       : <><button onClick={() => onRerun(false)}>Rerun</button>
         <button onClick={() => onRerun(true)}>Rerun fresh</button></>}
     <button className="secondary" onClick={onEdit}>Edit &amp; rerun</button>
+    {canShip && <button className="secondary" disabled={ship === 'loading'} onClick={checkShipping}>
+      {ship === 'loading' ? 'Checking shipping…' : 'Shipping to NY 10001'}</button>}
   </>
   return (
     <div className={`card result ${o.status}`}>
@@ -248,6 +280,7 @@ function ResultCard({ r, onRerun, onRetry, retrying, onEdit }) {
         <dt>Observed</dt><dd className="num">{fmtTime(r.observation_time)}</dd>
         <dt>Run</dt><dd className="num muted">{o.run_id}</dd>
       </dl>
+      {ship && ship !== 'loading' && <Shipping s={ship} />}
       <Evidence items={r.supporting_evidence} />
       <div className="actions">
         {actions}

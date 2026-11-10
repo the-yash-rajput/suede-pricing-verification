@@ -191,3 +191,7 @@ Candidate brands (named on suedehome.com, read 2026-11-10):
 - Centra `GET nordicknots.centra.com/api/checkout/selection` → `location.country=SG, market=5, pricelist=31`, currency CHF. Cookie `vercelIpCountry=SG`. Path/cookie/query params don't override it; no country selector on the site.
 - => JSON-LD USD is path-derived, NOT the session price. Adapter takes currency/market from Centra → `wrong_market` from here. Needs US egress.
 - Gotcha: sync Playwright deadlocks if you read a response body inside `page.on("response")`; collect, read after.
+
+## Shipping quote (live, 2026-11-10T22:39:39Z, egress US via VPN)
+- L&G Carson Sofa `42487540056163`, qty 1, New York NY 10001: guest cart `/cart/add.js` → `/cart/shipping_rates.json` → **White Glove Delivery USD 369.00**, the only rate. No async/freight polling needed. Run `r-20261110T223939Z-edc9bf`.
+- A misspelled size (200"W) → `variant_not_found`, nothing added to the cart (run `r-20261110T224012Z-8957f1`).

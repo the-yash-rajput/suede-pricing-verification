@@ -111,7 +111,29 @@ Every result has exactly the brief's 11 top-level fields, in this order:
   Observed 2026-11-11 (run `r-20261110T203840Z-2e19ea`): headed Chromium on Xvfb was **still blocked**. DataDome's page names our IP ("uncommon activity… IP 157.49.55.86") after the earlier runs, so it is an IP flag, not a headless fingerprint. The result is `unresolved: bot_blocked` after **one** attempt, with `blocked.png` and the body as evidence. Ops checks the price by hand and re-runs after the flag clears. No evasion.
 - **Membership and promo detection** is a text heuristic on the page. It flags; it never changes the amount.
 - **Cache TTL (15 min) and cooldown (120 s)** are hypotheses.
-- Shipping is deferred. West Elm is attempted, but blocked from our egress (see below).
+- Shipping covers one Shopify product only (see below). West Elm is attempted, but blocked (see below).
+
+## Shipping (optional)
+```
+python verify.py --shipping --brand "Lulu and Georgia" --url https://www.luluandgeorgia.com/products/carson-sofa \
+                 --variant '{"Color": "Ivory Modern Boucle", "Size": "103\"W"}'
+```
+**Live result** (run `r-20261110T223939Z-edc9bf`, 2026-11-10T22:39:39Z, egress US via VPN):
+
+| Field | Value |
+|---|---|
+| Destination | New York, NY 10001, US. Only city, state and ZIP were needed; `missing_fields: []`. |
+| Variant, quantity | `42487540056163` (Carson Sofa, Ivory Modern Boucle / 103"W), qty 1 |
+| Amount | **USD 369.00** |
+| Service | White Glove Delivery (the only rate offered) |
+| Per item / per basket | **Basket.** A Shopify rate is per cart, and this cart held one unit. Per-item scaling is not established from a single 1-unit quote. |
+| Basis | **Cart-calculator quote** (pre-checkout, before tax), not a policy estimate and not a final checkout total |
+
+- **How:** `pricecheck/shipping.py` works in an ephemeral browser session: `/cart/add.js` (guest cart), then `/cart/shipping_rates.json` with ZIP, state and country. There is no account, no checkout and no order, and the cart disappears with the browser context.
+- **Evidence:** `cart_add.json`, `shipping_rates.json` and `cart.json` under `backend/evidence/r-20261110T223939Z-edc9bf/lulu_and_georgia/`.
+- **When it fails, it's unresolved, never $0:** `rate_limited`, `address_incomplete` (lists the fields Shopify asks for), `no_rates` (ops: enter ZIP 10001 in a guest cart and record the shipping line), `variant_not_found` (nothing is added to the cart).
+- **In the UI:** a resolved Shopify result has a "Shipping to NY 10001" button (`POST /shipping`).
+- **Limits:** Shopify brands only; shipping quotes are not saved to the DB.
 
 ## West Elm (optional harder brand)
 Live, 2026-11-10 22:00–22:08 UTC, from India. Product: Pre-Lit Faux Citrus Garland, `https://www.westelm.com/products/citrus-garland-d18933/`, requested `Size: 8'`.

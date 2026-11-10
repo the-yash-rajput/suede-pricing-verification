@@ -62,6 +62,16 @@ def post_verify(v: VerifyIn):
     return verify(Request(v.brand, v.url, v.variant, v.quantity), no_cache=v.no_cache)
 
 
+@app.post("/shipping")
+def post_shipping(v: VerifyIn):
+    """Optional extension: guest-cart shipping quote to New York, NY 10001, qty 1. Shopify brands only."""
+    from pricecheck.shipping import quote
+    brand = db.get_brand(v.brand)
+    if not brand or brand["adapter"] != "shopify":
+        raise HTTPException(422, "shipping quotes are only built for Shopify brands")
+    return quote(Request(v.brand, v.url, v.variant, 1), brand, new_run_id())
+
+
 @app.get("/inputs")
 def get_inputs():
     return json.loads(INPUTS.read_text())
