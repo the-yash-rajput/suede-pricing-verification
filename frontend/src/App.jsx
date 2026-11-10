@@ -59,8 +59,10 @@ function Verify({ brands, prefill, onEdit }) {
   const [results, setResults] = useState([])
   useEffect(() => { if (prefill) setForm(prefill) }, [prefill])
 
+  // busy holds what is being checked (truthy) so the pending card can say it
   const run = async (req, noCache = false) => {
-    setBusy(true); setErr(null)
+    setBusy({ brand: req.brand, what: Object.values(req.variant || {}).filter(Boolean).join(' / ') || 'no variant given', noCache })
+    setErr(null)
     try {
       const variant = Object.fromEntries(Object.entries(req.variant).filter(([k]) => k.trim()))
       const r = await api.verify({ ...req, variant, quantity: Number(req.quantity), no_cache: noCache })
@@ -68,7 +70,7 @@ function Verify({ brands, prefill, onEdit }) {
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   const runInputs = async (noCache) => {
-    setBusy(true); setErr(null)
+    setBusy({ brand: 'Input file', what: 'every line of inputs.json', noCache }); setErr(null)
     try { const rs = await api.verifyInputs(noCache); setResults((xs) => [...rs, ...xs]) }
     catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
@@ -133,7 +135,7 @@ function Verify({ brands, prefill, onEdit }) {
       </aside>
 
       <main>
-        {busy && <p className="muted">Checking… browser lookups take 10–30s.</p>}
+        {busy && <Pending job={busy} />}
         {err && <p className="error">{err}</p>}
         {!busy && !err && !results.length &&
           <div className="empty">Verify a variant or run the input file. Results appear here, newest first.</div>}
@@ -142,6 +144,47 @@ function Verify({ brands, prefill, onEdit }) {
         ))}
       </main>
     </section>
+  )
+}
+
+const EST_SECS = 30  // ponytail: fixed estimate from observed browser lookups; per-brand p50 if it misleads
+
+function Pending({ job }) {
+  const [secs, setSecs] = useState(0)
+  useEffect(() => { const t = setInterval(() => setSecs((x) => x + 1), 1000); return () => clearInterval(t) }, [])
+  const over = secs > EST_SECS
+  const C = 2 * Math.PI * 34
+  return (
+    <div className={`card result pending${over ? ' over' : ''}`} role="status" aria-live="polite"
+         aria-label={`Checking ${job.brand}`}>
+      <div className="tag">
+        <div className="ghost">
+          <div className="ghost-amt" />
+          <div className="ghost-line" />
+        </div>
+        <div className="who">
+          <div className="badges"><span className="badge checking">checking</span>
+            {job.noCache && <span className="badge cache">skipping cache</span>}</div>
+          <strong>{job.brand}</strong>
+          <span className="muted">{job.what}</span>
+        </div>
+      </div>
+      <div className="body pending-body">
+        <svg className="ring" viewBox="0 0 80 80" aria-hidden="true">
+          <circle cx="40" cy="40" r="34" className="ring-track" />
+          <circle cx="40" cy="40" r="34" className="ring-fill" strokeDasharray={C}
+                  strokeDashoffset={over ? 0 : C * (secs / EST_SECS)} />
+          <text x="40" y="40" className="ring-num">{over ? `+${secs - EST_SECS}` : EST_SECS - secs}</text>
+          <text x="40" y="56" className="ring-unit">{over ? 'over' : 'sec'}</text>
+        </svg>
+        <div>
+          <strong>{over ? 'Taking longer than usual' : 'Looking up the live price'}</strong>
+          <p className="muted">{over
+            ? 'Retries, slow pages or bot checks add time. The result, or an unresolved reason, will still land here.'
+            : `Opening the product page and selecting this exact variant. Most checks finish within ${EST_SECS}s.`}</p>
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -136,3 +136,28 @@ table.obs.compact .c-src { width: 0; }
 .side .close { position: absolute; top: 10px; right: 10px; z-index: 1; width: 30px; height: 30px; padding: 0; border-radius: 50%;
   background: var(--paper); color: var(--muted); border: 1px solid var(--line); font-size: 18px; line-height: 1; }
 .side .close:hover { color: var(--ink); }
+/* pending: same shape as the result it becomes */
+.result.pending .tag { box-shadow: inset 4px 0 var(--spruce); }
+.result.pending.over .tag { box-shadow: inset 4px 0 var(--ochre); }
+.badge.checking { background: #dde8e6; color: var(--spruce); }
+.badge.checking::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1s ease-in-out infinite; }
+.ghost { display: grid; gap: 10px; align-content: center; }
+.ghost-amt, .ghost-line { border-radius: 6px; background: linear-gradient(90deg, var(--plaster) 0%, #f7f8f6 50%, var(--plaster) 100%) 0 0 / 200% 100%;
+  animation: shimmer 1.6s linear infinite; }
+.ghost-amt { width: 190px; height: 42px; } .ghost-line { width: 110px; height: 12px; }
+.pending-body { display: flex; align-items: center; gap: 18px; }
+.pending-body p { margin: 4px 0 0; max-width: 52ch; }
+.ring { width: 84px; height: 84px; flex: none; }
+.ring circle { fill: none; stroke-width: 5; }
+.ring-track { stroke: var(--line); }
+.ring-fill { stroke: var(--spruce); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%;
+  transition: stroke-dashoffset 1s linear, stroke .3s; }
+.over .ring-fill { stroke: var(--ochre); animation: pulse 1.2s ease-in-out infinite; }
+.ring-num { font: 400 26px var(--serif); fill: var(--ink); text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
+.ring-unit { font: 500 10px 'Hanken Grotesk', sans-serif; fill: var(--muted); text-anchor: middle; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .ghost-amt, .ghost-line, .badge.checking::before, .over .ring-fill { animation: none; } .ring-fill { transition: none; }
+}
