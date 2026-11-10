@@ -15,9 +15,9 @@
   },
   {
     "brand": "Nordic Knots",
-    "url": "https://www.nordicknots.com/us/rugs/TBD",
-    "variant": {"Size": "TBD"},
+    "url": "https://nordicknots.com/us/product/grand-milano-green/5x8",
+    "variant": {"Size": "5'x8'"},
     "quantity": 1,
-    "why": "Custom (headless Next.js). Pages returned an error body from India egress; product to pick via US VPN."
+    "why": "Custom (headless Next.js + Centra). Price varies by size ($995-$3,395). Market comes from the Centra session, not the /us path."
   }
 ]

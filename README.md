@@ -81,7 +81,7 @@ Every result has exactly the brief's 11 top-level fields, in this order:
 |---|---|---|---|
 | Lulu and Georgia | `shopify_ucp`: generic adapter, config only | exact option match in `/products/<handle>.js` → variant id; the page opened at `?variant=<id>` must select the same id | JSON price (cents) must equal the rendered page price; `Shopify.currency.active`/`Shopify.country` must be USD/US |
 | Serena & Lily | `custom/browser` (curl 403, browser OK) | options → child product id from the page's embedded JSON; navigate there and **re-read** the selected options | embedded sale/list cents must equal the rendered sale price; "Save X%" list price → compare-at; Affirm $/mo ignored |
-| Nordic Knots | `custom/browser` | JSON-LD offers (**not yet verified live**, see limitations) | — |
+| Nordic Knots | `custom/browser` (Next.js + Centra cart) | JSON-LD offer by exact `size`; if the page shows another size, pick it in the size listbox and **re-read** the picker + URL | JSON-LD amount must equal the rendered `[aria-live]` price; currency/market come from the **Centra session** (`/api/checkout/selection`), not the `/us` path |
 
 ## Example results
 > **To fill in from the first live run.** Paste the JSON from `verify.py --input ../inputs.json`, with the run_id and the paths under `backend/evidence/<run_id>/`. Values seen in manual browser checks on 2026-11-10 (not a prototype run):
@@ -94,11 +94,12 @@ Every result has exactly the brief's 11 top-level fields, in this order:
 2. Correct it to `103"W` → `resolved`.
 
 **Real failures observed:**
-- Nordic Knots returned HTTP 200 with a `{"error":"Internal Server Error"}` body from India (Vercel edge `bom1`), in both curl and Chrome.
+- Nordic Knots returned HTTP 200 with a `{"error":"Internal Server Error"}` body from India (Vercel edge `bom1`), in both curl and Chrome (2026-11-10). By 2026-11-11 the pages loaded.
+- **Nordic Knots, Grand – Milano Green 5'x8' (2026-11-11, run `r-20261110T212239Z-4f9dee`):** JSON-LD says `995 USD`, sku `GRAN-MGR-58-R`, but the page renders **`995 CHF`**. The Centra session is `country=SG, pricelist=31, currency=CHF` (our egress geolocates to Singapore; `vercelIpCountry=SG`). Result: `unresolved: wrong_market`, not a guessed $995. The JSON-LD "USD" follows the `/us` path, not the shopper's market. `NEXT_COUNTRY=US`, `?country=us` and the path don't change Centra, and the site has no country selector.
 - Shopify returned `429 local_rate_limited` across five unrelated stores on their first request.
 
 ## Known limitations
-- **Nordic Knots extraction is unverified.** It needs a US-egress run to pick a rug and pin the selectors. Today it detects the error body, retries twice, and returns `site_error` with evidence.
+- **Nordic Knots resolves only from a US egress.** The extraction and variant selection are verified live. The market check correctly refuses the SG/CHF session we get from here. A US VPN or a US-hosted worker should turn the same run into `resolved` USD 995.00 (unverified until then).
 - **Geo:** we run from India. The adapters force US/USD (cookies and locale) and **verify** the applied market. A mismatch becomes `wrong_market`, never a converted guess.
 - **Serena & Lily currency is inferred:** the site is US-only and `$`-formatted, with no currency field. This is recorded in `source.currency_basis`.
 - **Serena & Lily is behind DataDome** (curl 403 page from `geo.captcha-delivery.com`). The onboarding probe now names the vendor and proposes `config.headed=true`. Brands with that flag launch headed Chromium, on an Xvfb screen (`:99`) in Docker. Other brands stay headless.
