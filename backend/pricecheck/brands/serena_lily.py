@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import re
 
-from ..core import (RANGE_ONLY, SITE_ERROR, VARIANT_NOT_FOUND, Evidence, Observation, Request, Transient, money,
+from ..core import (BOT_BLOCKED, RANGE_ONLY, SITE_ERROR, VARIANT_NOT_FOUND, Evidence, Observation, Request, Transient, money,
                     norm)
 
 JSON_SEL = '[class*="ProductOptions_productOptionsContainer"] script'
@@ -23,6 +23,7 @@ SALE_SEL = '[class*="ProductPrice_salesPrice"]'
 LIST_SEL = '[class*="ProductPrice_listedPrice"]'
 WRAP_SEL = '[class*="ProductPrice_productPriceWrapper"]'
 AFFIRM_SEL = '[class*="ProductOptions_affirmWrapper"]'
+DATADOME = re.compile(r"captcha-delivery\.com|uncommon activity", re.I)
 
 
 def _opts(variants: list[dict]) -> dict[str, str]:
@@ -53,7 +54,7 @@ def fetch(req: Request, brand: dict, ev: Evidence) -> Observation:
     from ..browser import us_context
 
     base = re.sub(r"/[^/]+/?$", "", req.url.split("?")[0])  # .../products/delancey-quilt
-    with us_context() as ctx:
+    with us_context(headed=(brand.get("config") or {}).get("headed", False)) as ctx:
         page = ctx.new_page()
         r = page.goto(req.url, wait_until="domcontentloaded", timeout=45_000)
         status = r.status if r else None
@@ -65,6 +66,12 @@ def fetch(req: Request, brand: dict, ev: Evidence) -> Observation:
             ev.add("screenshot", "blocked.png", page.screenshot())
             body = page.inner_text("body")[:2000] if page.query_selector("body") else ""
             ev.add("dom_text", "body.txt", body, excerpt=f"HTTP {status}: {body[:200]}")
+            if DATADOME.search(body) or DATADOME.search(page.content()):
+                # ponytail: one attempt, no evasion. DataDome flags the IP; retrying just extends the flag.
+                return Observation(product={"url": req.url}, source={"method": "browser_embedded_json", "url": req.url},
+                                   failure=(BOT_BLOCKED, {"status": status, "vendor": "datadome",
+                                                          "note": "ops: open the URL in a real browser and confirm the "
+                                                                  "price by hand; re-run after the IP flag clears"}))
             return Observation(product={"url": req.url}, source={"method": "browser_embedded_json", "url": req.url},
                                failure=(SITE_ERROR, {"status": status, "note": "product data not found: bot wall, "
                                                      "error page, or page structure changed"}))

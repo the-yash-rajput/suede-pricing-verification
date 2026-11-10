@@ -20,7 +20,8 @@ PRICE_NOT_FOUND = "price_not_found"
 CONDITIONAL_ONLY = "conditional_price_only"  # only a member / promo-code price was found
 WRONG_MARKET = "wrong_market"                # not US / USD
 SOURCES_DISAGREE = "sources_disagree"        # structured source vs rendered page
-SITE_ERROR = "site_error"                    # error page, bot wall, timeouts after retries
+SITE_ERROR = "site_error"                    # error page, timeouts after retries
+BOT_BLOCKED = "bot_blocked"                  # bot-protection vendor blocked us: no retry, ops handoff
 RATE_LIMITED = "rate_limited"
 NO_ADAPTER = "no_adapter"
 

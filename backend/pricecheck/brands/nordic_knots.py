@@ -43,7 +43,7 @@ def fetch(req: Request, brand: dict, ev: Evidence) -> Observation:
 
     cookies = [{"name": "NEXT_COUNTRY", "value": "US", "domain": ".nordicknots.com", "path": "/"},
                {"name": "NEXT_LANGUAGE", "value": "en", "domain": ".nordicknots.com", "path": "/"}]
-    with us_context(cookies) as ctx:
+    with us_context(cookies, headed=(brand.get("config") or {}).get("headed", False)) as ctx:
         page = ctx.new_page()
         r = page.goto(req.url, wait_until="domcontentloaded", timeout=45_000)
         page.wait_for_timeout(2000)

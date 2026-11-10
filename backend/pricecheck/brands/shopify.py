@@ -102,7 +102,7 @@ def fetch(req: Request, brand: dict, ev: Evidence) -> Observation:
     scope = cfg.get("rate_scope", "shopify-global")
     cookies = [{"name": n, "value": v, "domain": domain, "path": "/"} for n, v in US_COOKIES]
 
-    with us_context(cookies) as ctx:
+    with us_context(cookies, headed=(brand.get("config") or {}).get("headed", False)) as ctx:
         page = ctx.new_page()
         # Observed 2026-11-10: Shopify's edge answers non-browser clients (curl, Playwright's API client) with
         # 429 local_rate_limited on EVERY request, even the HTML page, while a real page navigation gets 200.

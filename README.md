@@ -101,7 +101,8 @@ Every result has exactly the brief's 11 top-level fields, in this order:
 - **Nordic Knots extraction is unverified.** It needs a US-egress run to pick a rug and pin the selectors. Today it detects the error body, retries twice, and returns `site_error` with evidence.
 - **Geo:** we run from India. The adapters force US/USD (cookies and locale) and **verify** the applied market. A mismatch becomes `wrong_market`, never a converted guess.
 - **Serena & Lily currency is inferred:** the site is US-only and `$`-formatted, with no currency field. This is recorded in `source.currency_basis`.
-- **Headless Chromium may be bot-blocked** on some sites (Serena & Lily blocks curl). Fallbacks: `HEADLESS=0` / `BROWSER_CHANNEL=chrome`. In Docker only headless is possible.
+- **Serena & Lily is behind DataDome** (curl 403 page from `geo.captcha-delivery.com`). The onboarding probe now names the vendor and proposes `config.headed=true`. Brands with that flag launch headed Chromium, on an Xvfb screen (`:99`) in Docker. Other brands stay headless.
+  Observed 2026-11-11 (run `r-20261110T203840Z-2e19ea`): headed Chromium on Xvfb was **still blocked**. DataDome's page names our IP ("uncommon activity… IP 157.49.55.86") after the earlier runs, so it is an IP flag, not a headless fingerprint. The result is `unresolved: bot_blocked` after **one** attempt, with `blocked.png` and the body as evidence. Ops checks the price by hand and re-runs after the flag clears. No evasion.
 - **Membership and promo detection** is a text heuristic on the page. It flags; it never changes the amount.
 - **Cache TTL (15 min) and cooldown (120 s)** are hypotheses.
 - Shipping and West Elm are deferred.

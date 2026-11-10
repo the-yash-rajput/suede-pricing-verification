@@ -18,6 +18,9 @@ from .browser import UA
 from .core import now_iso
 
 CHALLENGE = re.compile(r"just a moment|cf-chl|captcha|access denied|px-captcha|are you a human", re.I)
+BOT_VENDORS = {"datadome": re.compile(r"captcha-delivery\.com|x-datadome", re.I),
+               "cloudflare": re.compile(r"cf-chl|just a moment", re.I),
+               "perimeterx": re.compile(r"px-captcha|perimeterx", re.I)}
 
 
 def _get(url: str, timeout=15) -> dict:
@@ -84,8 +87,13 @@ def probe(domain: str, sample_url: str) -> dict:
         signals.append("Shopify markers in page HTML/headers")
     if "__NEXT_DATA__" in page["body"] or "x-vercel-id" in hdr or hdr.get("server", "").lower() == "vercel":
         signals.append("Next.js / Vercel (headless)")
-    if page["status"] in (403, 503) and CHALLENGE.search(page["body"]):
-        signals.append(f"bot challenge on plain HTTP ({page['status']}); needs a real browser or ops")
+    config = {}
+    if page["status"] in (403, 503):
+        hay = page["body"] + json.dumps(hdr)
+        vendor = next((n for n, rx in BOT_VENDORS.items() if rx.search(hay)), None)
+        if vendor or CHALLENGE.search(page["body"]):
+            config = {"headed": True, "bot_vendor": vendor or "unknown"}
+            signals.append(f"bot wall: {vendor or 'unknown'} ({page['status']}); proposing config.headed=true")
     if page["status"] == 200 and re.search(r'"error"\s*:\s*"Internal Server Error"', page["body"][:500]):
         signals.append("HTTP 200 with an error body: not a product page")
 
@@ -99,7 +107,7 @@ def probe(domain: str, sample_url: str) -> dict:
         signals.append(f"suggested custom rung: {custom_method}")
 
     return {"domain": domain, "approach": approach, "adapter": adapter, "custom_method": custom_method,
-            "ucp_endpoint": ucp_endpoint, "ucp_capabilities": ucp_caps, "signals": signals,
+            "config": config, "ucp_endpoint": ucp_endpoint, "ucp_capabilities": ucp_caps, "signals": signals,
             "probe_evidence": evidence}
 
 

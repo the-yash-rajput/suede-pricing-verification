@@ -322,7 +322,7 @@ function Brands({ brands, reload }) {
     setErr(null)
     try {
       const { signals, ...b } = proposal
-      await api.saveBrand({ ...b, probe_evidence: { ...b.probe_evidence, signals }, config: {} })
+      await api.saveBrand({ ...b, probe_evidence: { ...b.probe_evidence, signals }, config: b.config || {} })
       setProposal(null); setF({ name: '', domain: '', sample_url: '' }); reload()
     } catch (e) { setErr(e.message) }
   }
@@ -381,6 +381,7 @@ function Brands({ brands, reload }) {
             )}
             <label>Adapter{adapterSelect(proposal.adapter, (adapter) => setProposal({ ...proposal, adapter }))}</label>
             <p>UCP: {proposal.ucp_endpoint || 'no'}</p>
+            <p className="muted">Proposed config: <code>{JSON.stringify(proposal.config || {})}</code></p>
             <details><summary>Probe evidence</summary><pre>{JSON.stringify(proposal.probe_evidence, null, 2)}</pre></details>
             <div className="actions"><button onClick={save}>Save brand</button></div>
           </div>

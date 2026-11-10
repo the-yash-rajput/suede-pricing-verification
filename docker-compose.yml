@@ -19,7 +19,8 @@ services:
       INPUTS_FILE: /app/inputs.json
       CORS_ORIGINS: http://localhost:5173
     ports: ["8000:8000"]
-    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["sh", "-c", "Xvfb :99 -screen 0 1366x900x24 -nolisten tcp & exec uvicorn api:app --host 0.0.0.0 --port 8000 --reload"]
+    shm_size: 1gb                          # headed Chromium crashes on the default 64 MB /dev/shm
     volumes:
       - ./backend:/app                     # live code (dev); evidence/ lands in ./backend/evidence on the host
       - ./inputs.json:/app/inputs.json:ro
