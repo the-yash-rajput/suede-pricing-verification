@@ -161,3 +161,5 @@ table.obs.compact .c-src { width: 0; }
 @media (prefers-reduced-motion: reduce) {
   .ghost-amt, .ghost-line, .badge.checking::before, .over .ring-fill { animation: none; } .ring-fill { transition: none; }
 }
+.opts .row .remove { flex: none; width: 34px; padding: 0; background: transparent; border-color: var(--line); color: var(--muted); font-size: 17px; line-height: 1; }
+.opts .row .remove:hover:not(:disabled) { color: var(--oxblood); border-color: var(--oxblood); }

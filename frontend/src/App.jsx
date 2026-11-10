@@ -51,20 +51,23 @@ export default function App() {
 
 /* ---------------- Verify ---------------- */
 
+// form.variant is a list of [option, value] rows (an object would merge same-named or blank rows)
+const toRows = (v) => { const rows = Array.isArray(v) ? v : Object.entries(v || {}); return rows.length ? rows : [['', '']] }
+
 function Verify({ brands, prefill, onEdit }) {
-  const blank = { brand: '', url: '', variant: { '': '' }, quantity: 1 }
-  const [form, setForm] = useState(prefill || blank)
+  const blank = { brand: '', url: '', variant: [['', '']], quantity: 1 }
+  const [form, setForm] = useState(prefill ? { ...prefill, variant: toRows(prefill.variant) } : blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [results, setResults] = useState([])
-  useEffect(() => { if (prefill) setForm(prefill) }, [prefill])
+  useEffect(() => { if (prefill) setForm({ ...prefill, variant: toRows(prefill.variant) }) }, [prefill])
 
   // busy holds what is being checked (truthy) so the pending card can say it
   const run = async (req, noCache = false) => {
-    setBusy({ brand: req.brand, what: Object.values(req.variant || {}).filter(Boolean).join(' / ') || 'no variant given', noCache })
+    const variant = Object.fromEntries(toRows(req.variant).filter(([k]) => k.trim()))
+    setBusy({ brand: req.brand, what: Object.values(variant).filter(Boolean).join(' / ') || 'no variant given', noCache })
     setErr(null)
     try {
-      const variant = Object.fromEntries(Object.entries(req.variant).filter(([k]) => k.trim()))
       const r = await api.verify({ ...req, variant, quantity: Number(req.quantity), no_cache: noCache })
       setResults((xs) => [r, ...xs])
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
@@ -77,13 +80,10 @@ function Verify({ brands, prefill, onEdit }) {
   const loadInput = async () => {
     const xs = await api.inputs()
     const x = xs.find((i) => i.brand === form.brand) || xs[0]
-    if (x) setForm({ brand: x.brand, url: x.url, variant: x.variant, quantity: x.quantity || 1 })
+    if (x) setForm({ brand: x.brand, url: x.url, variant: toRows(x.variant), quantity: x.quantity || 1 })
   }
-  const setOpt = (i, k, v) => {
-    const entries = Object.entries(form.variant)
-    entries[i] = [k, v]
-    setForm({ ...form, variant: Object.fromEntries(entries) })
-  }
+  const setOpt = (i, k, v) => setForm({ ...form, variant: form.variant.map((row, j) => (j === i ? [k, v] : row)) })
+  const removeOpt = (i) => setForm({ ...form, variant: toRows(form.variant.filter((_, j) => j !== i)) })
   const rerun = (r, noCache) => run({ brand: r.brand, url: r.product?.url, variant: r.requested_variant.options,
                                       quantity: r.requested_variant.quantity }, noCache)
 
@@ -106,13 +106,17 @@ function Verify({ brands, prefill, onEdit }) {
         </label>
         <div className="opts">
           <span className="lbl">Variant options</span>
-          {Object.entries(form.variant).map(([k, v], i) => (
+          {form.variant.map(([k, v], i) => (
             <div key={i} className="row">
-              <input value={k} placeholder="option (e.g. Size)" onChange={(e) => setOpt(i, e.target.value, v)} />
-              <input value={v} placeholder='value (e.g. 103"W)' onChange={(e) => setOpt(i, k, e.target.value)} />
+              <input value={k} placeholder="option (e.g. Size)" aria-label={`Option ${i + 1} name`}
+                     onChange={(e) => setOpt(i, e.target.value, v)} />
+              <input value={v} placeholder='value (e.g. 103"W)' aria-label={`Option ${i + 1} value`}
+                     onChange={(e) => setOpt(i, k, e.target.value)} />
+              <button className="remove" title="Remove this option" aria-label={`Remove option ${k || i + 1}`}
+                      disabled={form.variant.length === 1 && !k && !v} onClick={() => removeOpt(i)}>×</button>
             </div>
           ))}
-          <button className="link" onClick={() => setForm({ ...form, variant: { ...form.variant, '': '' } })}>+ option</button>
+          <button className="link" onClick={() => setForm({ ...form, variant: [...form.variant, ['', '']] })}>+ option</button>
         </div>
         <label className="qty">Quantity
           <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
