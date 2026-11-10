@@ -1,0 +1,23 @@
+[
+  {
+    "brand": "Lulu and Georgia",
+    "url": "https://www.luluandgeorgia.com/products/carson-sofa",
+    "variant": {"Color": "Ivory Modern Boucle", "Size": "103\"W"},
+    "quantity": 1,
+    "why": "Shopify + UCP. Price varies by size AND fabric ($1,898-$2,898), so a wrong pick is visible."
+  },
+  {
+    "brand": "Serena & Lily",
+    "url": "https://www.serenaandlily.com/products/delancey-quilt/1358963",
+    "variant": {"Size": "Full/Queen", "Color": "Coastal Blue"},
+    "quantity": 1,
+    "why": "Custom (headless Next.js, curl 403). Browser-dependent flow. Live sale: selling vs compare-at."
+  },
+  {
+    "brand": "Nordic Knots",
+    "url": "https://www.nordicknots.com/us/rugs/TBD",
+    "variant": {"Size": "TBD"},
+    "quantity": 1,
+    "why": "Custom (headless Next.js). Pages returned an error body from India egress; product to pick via US VPN."
+  }
+]

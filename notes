@@ -1,0 +1,171 @@
+# Working notes
+
+## Brief: "~70% Shopify + UCP, capabilities vary"
+
+**Shopify (~84 of 120 brands).** Every Shopify store exposes the same public product data, whatever the theme:
+- `/products/<handle>.js` (or `.json`) gives every variant: id, options, `price`, `compare_at_price` (the crossed-out price).
+- The product page embeds the same data (JSON-LD / product JSON).
+- `?variant=<id>` pins the page to one variant.
+
+**UCP (Universal Commerce Protocol).** An open agentic-commerce standard (Google + Shopify, early 2026). A merchant publishes a profile at `/.well-known/ucp` listing its capabilities (catalog, checkout, ...). Written from memory, so confirm it against the live sites before relying on it.
+
+**"Capabilities vary", meaning the JSON isn't always the truth:**
+- Apps can rewrite prices on the page (sale banners, "members save 20%", promo pop-ups), so the JSON and the visible page can disagree.
+- Headless stores (a custom frontend over Shopify) may not serve the standard URLs.
+- Some stores block or rate-limit `.js`/`.json`.
+
+**Design implication:**
+
+| Segment | Approach | Cost |
+|---|---|---|
+| Shopify/UCP (~84) | One shared adapter, structured data/UCP first, browser to confirm variant + price on the page | Cheap, one codebase |
+| Long tail (~36) | Browser automation or ops review, per brand, by volume | Expensive, per-brand upkeep |
+
+Caveat: 70% counts brands, not volume. Check which of the top-12 brands are on Shopify. West Elm, CB2, Crate & Barrel and RH are likely custom stacks (unverified).
+
+## Sample: Lulu and Georgia, Carson Sofa (`carson-sofa.js`)
+
+**Recorded evidence**, not a live observation. File saved 2026-11-10 22:02 local; the fetch time isn't inside the file.
+- Source: `https://www.luluandgeorgia.com/products/carson-sofa.js`. Confirms **Lulu and Georgia is Shopify** and the endpoint is public.
+- Product id `7553558872163`, vendor "Lulu and Georgia", type Furniture.
+- Options: **Color** (25 fabrics) x **Size** (`85"W`, `103"W`, `120"W`), giving **75 variants**, all `available: true`.
+- **Prices are integer cents**: `259800` = $2,598.00. Range $1,898–$2,898.
+- **Price varies by size AND fabric**, which makes this a good product for proving the right variant was picked:
+  - 85"W: $1,898 / $2,098 / $2,298
+  - 103"W: $2,198 / $2,398 / $2,598
+  - 120"W: $2,498 / $2,698 / $2,898
+- `compare_at_price == price` on every variant, so **no strike-through sale** at capture. Rule: a sale only when `compare_at_price > price`; equal or null means none.
+- No selling plans, no quantity price breaks, `quantity_rule` min 1 / increment 1, so unit price x qty is safe for this product.
+- Example variants:
+  - `42487540056163` Ivory Modern Boucle / 103"W, $2,598, SKU L0484640
+  - `42487540088931` Balsam Classic Velvet / 103"W, $2,398, SKU L0484641
+
+**What the JSON can't tell us** (this is why we need the browser step):
+- Membership-only or promo-code prices. These live in on-page banners/apps, not in `.js`.
+- Whether the rendered page shows the same price for the selected variant.
+- Market/currency. `.js` reflects the storefront's context. Pin a US/USD context and record it.
+
+## Live checks, 2026-11-10 16:39–16:42 UTC (current observations, this run)
+
+**UCP, Lulu and Georgia: present.** `GET /.well-known/ucp` returns 200 JSON, version `2026-08-25`, MCP endpoint `https://lulu-and-georgia.myshopify.com/api/ucp/mcp`.
+- Capabilities: checkout, fulfillment, discount, cart, buyer_consent, order, catalog.search, **catalog.lookup**, dev.shopify.catalog, location.*, identity_linking, permalink, ask, declared_fields.
+- `catalog.lookup` is a likely structured price source to try next to `.js`. `fulfillment` + `cart` may cover the optional shipping quote. Not exercised yet.
+- My earlier "written from memory" note on UCP is now confirmed for this site.
+
+**UCP, Nordic Knots: absent.** `/.well-known/ucp` returns the site's HTML app, not a profile.
+
+**Nordic Knots is NOT standard Shopify.** It's headless Next.js on Vercel:
+- `server: Vercel`, cookies `NEXT_COUNTRY=US`, `NEXT_LANGUAGE=en`, redirects `/` to `/us`.
+- `/us/products.json` returns the app's JSON error, not Shopify data. No `myshopify`/`cdn.shopify` reference found.
+- So it lands in the "inconsistent infrastructure" bucket. This is the **brief's "capabilities vary" in practice**, and it's an argument that the 70% figure must be checked per brand.
+
+**BLOCKER: every Nordic Knots page returns an error.** `/us`, `/us/rugs/...` and `/us/collections/all` return HTTP **200** with body `{"error":"Internal Server Error","status":500}`, in both curl **and** a real Chrome tab.
+- Static routes work: `robots.txt` and `/api/sitemap/us` (1,896 URLs) return 200.
+- The Vercel edge was `bom1` (Mumbai). Likely a geo or edge problem from India, or a real outage. Unverified.
+- **Lesson for validation: HTTP 200 is not success.** The body must parse as the expected shape, or the result is unresolved.
+- Next: retry later, or try a US egress. If it's still blocked, ship Nordic Knots as an **unresolved result with this evidence** (the brief allows "document blocker, move on").
+
+**Lulu and Georgia `.js` rate-limited.** The re-fetch of `carson-sofa.js` at 16:42 UTC returned **429**, empty body, a few minutes after the first fetch plus the UCP probe.
+- So a variant re-check can't be a tight loop.
+- Needs: backoff, a cache with an observation time, and UCP/page as the fallback source.
+- Good candidate for the **month-1 priority / observed limitation** in the write-up.
+
+
+## Replacement brand scan (live, 2026-11-10 17:00 UTC, one `/products.json?limit=1` per site)
+
+| Brand | Response | Read |
+|---|---|---|
+| Parachute, Jenni Kayne, Sundays, Sabai, House of Leon | 429 `local_rate_limited` (text/plain) | Shopify edge throttle, so **likely Shopify** |
+| Serena & Lily | 404, Next.js HTML | Headless, no Shopify JSON |
+| Italic | 404, Next.js HTML | Headless |
+| Soho Home | 403 Cloudflare "Just a moment..." | Bot challenge |
+
+**Key finding: Shopify rate-limits per client IP across ALL stores.** Five unrelated stores returned the same `local_rate_limited` on their **first** request.
+- The earlier L&G 429 is most likely the same throttle, not L&G-specific.
+- Architecture impact: one shared, global request budget for all ~84 Shopify brands, not per-brand limits. Plus a cache, and a cooldown after a 429.
+- Strong month-1 item.
+
+Headless (Nordic Knots, Serena & Lily, Italic) and Cloudflare (Soho Home) are a real pattern even among named brands, not edge cases.
+
+## Substitute for Nordic Knots
+
+Candidate brands (named on suedehome.com, read 2026-11-10):
+1. CB2
+2. Crate & Barrel
+3. West Elm
+4. Design Within Reach (DWR)
+5. Lulu & Georgia
+6. Anthropologie
+7. RH
+8. Serena & Lily
+9. Herman Miller
+10. Arhaus
+11. Soho Home
+12. Jenni Kayne
+13. Parachute
+14. 1stDibs
+15. Nordic Knots
+16. House of Leon
+17. Sabai
+
+**Rule:** pick the one whose platform is **most similar to Nordic Knots** (headless Next.js, not standard Shopify, no UCP profile). See the Nordic Knots platform check above.
+- That way the substitute exercises the same non-Shopify path the brief intended, instead of a second easy Shopify store.
+- Document it as a swap, and keep the Nordic Knots blocker as evidence.
+
+**Current lead: Serena & Lily.** It's headless Next.js and `/products.json` returns 404. It's the closest match so far.
+- Still to confirm: hosting (Vercel?), whether `/.well-known/ucp` is absent, and whether product pages render, with a price + size variants.
+- The rest of the list hasn't been platform-checked. Parachute and the other likely-Shopify stores are **not** a match; they'd duplicate L&G.
+
+## Serena & Lily check (live, 2026-11-10 17:10–17:12 UTC), PICKED as the Nordic Knots substitute
+
+**Platform matches Nordic Knots:**
+- `server: Vercel`, same `bom1` edge as Nordic Knots, Next.js (`__NEXT_DATA__`, ~750 KB).
+- No `myshopify`/`cdn.shopify` reference. `/products.json` returns 404.
+- **UCP absent:** `/.well-known/ucp` returns 404 (Next.js HTML).
+
+**Difference from Nordic Knots (why it's usable):**
+- curl gets **403** (bot challenge HTML), but a **real Chrome tab renders the pages**.
+- So browser automation is required here, not optional. That makes it the brief's "browser-dependent flow".
+
+**Product:** Delancey Quilt. Links:
+- Product base: https://www.serenaandlily.com/products/delancey-quilt/1358964
+  - **Redirects to a default variant** (`/1359007`, Full/Queen, Grove).
+  - Never treat the landing URL as the requested variant. Always confirm the selected size+color on the page.
+- Full/Queen, Coastal Blue: https://www.serenaandlily.com/products/delancey-quilt/1358963
+- Full/Queen, Grove: https://www.serenaandlily.com/products/delancey-quilt/1359007
+- Master (no complete variant): https://www.serenaandlily.com/products/delancey-quilt/m16292
+
+**Options:** Size {Full/Queen, King/Cal King} x Color {Coastal Blue, Lark, Grove, Blush}.
+
+**Prices (rendered DOM, client-side):**
+
+| Variant | Original (compare-at) | Selling | Note |
+|---|---|---|---|
+| Full/Queen (Grove, Coastal Blue) | $448 | **$268** | "Save 40%" |
+| King/Cal King | $498 | $298 | Implied by the range "$448 - $498" / "$268 - $298 (Save up to 40%)" |
+
+- Sizes ARE priced differently, so the variant choice is provable.
+- A **live sale** is good for showing selling vs compare-at.
+- The compare-at isn't styled `line-through` in CSS. It's two separate `<h5>` elements, so tell them apart by order/class + the "Save X%" text, not by strike-through.
+- Banner "Sale of the Year. Best Pricing + Free Shipping": **sitewide, no code needed**, so it's not promo-code pricing. Record it as evidence.
+- Affirm "$24/mo" is a financing figure. It must be ignored, never taken as the price.
+
+**Gotchas seen:**
+- King/Cal King was **unavailable** in Grove and Coastal Blue.
+  - Clicking it in Grove cleared the color, moved to master `m16292`, showed only the range, and said "We only have 0 of those available".
+  - Rule: an incomplete selection or range-only price = **unresolved**, never the lower end of the range.
+- No price found in `__NEXT_DATA__` (key scan). Price arrives client-side. The source API isn't identified yet (network capture started too late).
+- One scripted color click didn't register (page stayed on Coastal Blue). Variant selection must re-read the selected options after each action, not assume.
+
+**Input-file proposal:** Delancey Quilt, Full/Queen, Coastal Blue, qty 1. URL `/products/delancey-quilt/1358963`. Expected selling price **$268** (compare-at $448).
+- Optional failure demo: request King/Cal King / Coastal Blue → unresolved (unavailable, range-only).
+
+## Open items
+- [x] Nordic Knots platform check: headless Next.js/Vercel, not standard Shopify. Product + variant **still not picked** (pages blocked, see above).
+- [x] `/.well-known/ucp`: L&G yes (MCP, catalog.lookup), Nordic Knots no.
+- [ ] Choose the L&G variant. Proposal unchanged: Ivory Modern Boucle / 103"W (`42487540056163`, $2,598 in the recorded sample). Couldn't re-confirm live because of the 429. Re-check after cooldown.
+- [ ] Nordic Knots: retry pages after a cooldown/other egress. Find a rug with size variants at different prices, and its data source (`__NEXT_DATA__` / network JSON).
+- [x] Pick the Nordic Knots substitute: **Serena & Lily** (Vercel/Next.js, no UCP, browser-only). Delancey Quilt, Full/Queen $268 vs King $298. See section above.
+- [ ] Serena & Lily: capture the network response that carries the variant price (reload with network tracking on), to use as structured evidence next to the DOM.
+- [ ] Optional: find a King/Cal King color in stock, to show a successful second-size lookup.
+- [ ] Try UCP `catalog.lookup` on L&G as the structured source (and as a fallback while `.js` is rate-limited).

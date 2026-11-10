@@ -1,0 +1,104 @@
+"""HTTP API for the React UI. Thin: every price check goes through the same service.verify() as the CLI.
+
+  uvicorn api:app --reload --port 8000
+"""
+import json
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
+
+from pricecheck import db
+from pricecheck.core import EVIDENCE_ROOT, Request, new_run_id
+from pricecheck.probe import probe
+from pricecheck.service import verify
+
+INPUTS = Path(os.environ.get("INPUTS_FILE", Path(__file__).resolve().parent.parent / "inputs.json"))
+
+app = FastAPI(title="Suede price verification")
+app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(","),
+                   allow_methods=["*"], allow_headers=["*"])
+EVIDENCE_ROOT.mkdir(exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=EVIDENCE_ROOT), name="evidence")
+
+
+@app.on_event("startup")
+def _init():
+    db.init()
+
+
+class VerifyIn(BaseModel):
+    brand: str
+    url: str
+    variant: dict[str, str]
+    quantity: int = 1
+    no_cache: bool = False
+
+
+class BrandIn(BaseModel):
+    name: str
+    domain: str
+    sample_url: str
+
+
+class BrandPatch(BaseModel):
+    approach: str | None = None
+    custom_method: str | None = None
+    adapter: str | None = None
+    status: str | None = None
+    config: dict | None = None
+
+
+@app.post("/verify")
+def post_verify(v: VerifyIn):
+    # sync def -> FastAPI runs it in a worker thread; sync Playwright is fine there
+    return verify(Request(v.brand, v.url, v.variant, v.quantity), no_cache=v.no_cache)
+
+
+@app.get("/inputs")
+def get_inputs():
+    return json.loads(INPUTS.read_text())
+
+
+@app.post("/verify/inputs")
+def verify_inputs(no_cache: bool = False):
+    run_id = new_run_id()
+    return [verify(Request(x["brand"], x["url"], x["variant"], x.get("quantity", 1)), no_cache=no_cache, run_id=run_id)
+            for x in json.loads(INPUTS.read_text())]
+
+
+@app.get("/observations")
+def get_observations(brand: str | None = None, outcome: str | None = None, limit: int = 100):
+    return db.list_observations(brand, outcome, limit)
+
+
+@app.get("/brands")
+def get_brands():
+    return db.list_brands()
+
+
+@app.post("/brands/probe")
+async def post_probe(b: BrandIn):
+    """Probe only; nothing saved. The UI shows this to ops before they save."""
+    return await run_in_threadpool(probe, b.domain, b.sample_url)
+
+
+@app.post("/brands")
+def post_brand(b: dict):
+    """Save a brand (usually the probe result, possibly overridden by ops)."""
+    if db.get_brand(b.get("name", "")):
+        raise HTTPException(409, "brand already exists")
+    b.setdefault("status", "onboarding")
+    return db.create_brand(b)
+
+
+@app.patch("/brands/{brand_id}")
+def patch_brand(brand_id: int, p: BrandPatch):
+    row = db.update_brand(brand_id, p.model_dump(exclude_none=True))
+    if not row:
+        raise HTTPException(404)
+    return row
