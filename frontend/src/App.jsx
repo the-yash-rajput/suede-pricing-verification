@@ -342,7 +342,7 @@ function Brands({ brands, reload }) {
               <td>{b.ucp_endpoint ? 'yes' : 'no'}</td>
               <td>
                 <select value={b.status} onChange={(e) => patch(b.id, { status: e.target.value })}>
-                  {['onboarding', 'live', 'disabled'].map((s) => <option key={s}>{s}</option>)}
+                  {['live', 'disabled'].map((s) => <option key={s}>{s}</option>)}
                 </select>
               </td>
             </tr>

@@ -10,7 +10,9 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import psycopg
 from pydantic import BaseModel
+from typing import Literal
 from starlette.concurrency import run_in_threadpool
 
 from pricecheck import brands as brand_pkg, db
@@ -50,7 +52,7 @@ class BrandPatch(BaseModel):
     approach: str | None = None
     custom_method: str | None = None
     adapter: str | None = None
-    status: str | None = None
+    status: Literal["live", "disabled"] | None = None
     config: dict | None = None
 
 
@@ -107,10 +109,11 @@ def get_adapters():
 def post_brand(b: dict):
     """Save a brand (usually the probe result, possibly overridden by ops)."""
     _check_adapter(b.get("adapter"))
-    if db.get_brand(b.get("name", "")):
-        raise HTTPException(409, "brand already exists")
-    b.setdefault("status", "onboarding")
-    return db.create_brand(b)
+    b["status"] = "live"  # saving is the end of onboarding; ops can disable it later
+    try:
+        return db.create_brand(b)
+    except psycopg.errors.UniqueViolation:  # brands_name_ci_key / brands_domain_key in schema.sql
+        raise HTTPException(409, f"a brand named {b.get('name')!r} or on {b.get('domain')!r} already exists")
 
 
 @app.patch("/brands/{brand_id}")

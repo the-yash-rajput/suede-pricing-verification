@@ -9,11 +9,20 @@ CREATE TABLE IF NOT EXISTS brands (
     ucp_endpoint    text,
     ucp_capabilities jsonb,
     probe_evidence  jsonb,
-    status          text NOT NULL DEFAULT 'onboarding' CHECK (status IN ('onboarding', 'live', 'disabled')),
+    status          text NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'disabled')),
     config          jsonb NOT NULL DEFAULT '{}'::jsonb,   -- ttl_seconds, rate_scope, extra banner phrases
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
+-- Migrations for databases created before these rules (idempotent, like the rest of this file).
+-- Status: 'onboarding' was never gated on (service.verify only checks 'disabled'), so a saved brand is live or disabled.
+UPDATE brands SET status = 'live' WHERE status NOT IN ('live', 'disabled');
+ALTER TABLE brands ALTER COLUMN status SET DEFAULT 'live';
+ALTER TABLE brands DROP CONSTRAINT IF EXISTS brands_status_check;
+ALTER TABLE brands ADD CONSTRAINT brands_status_check CHECK (status IN ('live', 'disabled'));
+-- One row per retailer: name unique ignoring case; domain unique ignoring case and a leading "www.".
+CREATE UNIQUE INDEX IF NOT EXISTS brands_name_ci_key ON brands (lower(name));
+CREATE UNIQUE INDEX IF NOT EXISTS brands_domain_key ON brands (lower(regexp_replace(domain, '^www\.', '')));
 
 CREATE TABLE IF NOT EXISTS observations (
     id                  bigserial PRIMARY KEY,

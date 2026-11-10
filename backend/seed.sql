@@ -7,6 +7,6 @@ INSERT INTO brands (name, domain, approach, custom_method, adapter, ucp_endpoint
    '{"ttl_seconds": 900, "headed": true, "bot_vendor": "datadome"}'),
   ('Nordic Knots', 'www.nordicknots.com', 'custom', 'browser', 'nordic_knots', NULL, 'live',
    '{"ttl_seconds": 900}')
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT DO NOTHING;  -- name or domain already present
 -- DataDome blocks headless Chromium on S&L (2026-11-11); existing DBs miss the seed change above.
 UPDATE brands SET config = config || '{"headed": true, "bot_vendor": "datadome"}' WHERE name = 'Serena & Lily';
