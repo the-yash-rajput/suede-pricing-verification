@@ -192,10 +192,17 @@ function Pending({ job }) {
   )
 }
 
-function ResultCard({ r, onRerun, onEdit }) {
+function ResultCard({ r, onRerun, onRetry, retrying, onEdit }) {
   const [raw, setRaw] = useState(false)
   const o = r.outcome
   const pb = r.price_basis
+  // same actions at the top and the bottom of the card: no scrolling past the evidence to act
+  const actions = <>
+    {onRetry ? <button onClick={onRetry} disabled={retrying}>{retrying ? 'Retrying…' : 'Retry'}</button>
+      : <><button onClick={() => onRerun(false)}>Rerun</button>
+        <button onClick={() => onRerun(true)}>Rerun fresh</button></>}
+    <button className="secondary" onClick={onEdit}>Edit &amp; rerun</button>
+  </>
   return (
     <div className={`card result ${o.status}`}>
       <div className="tag">
@@ -217,6 +224,7 @@ function ResultCard({ r, onRerun, onEdit }) {
         </div>
       </div>
       <div className="body">
+      <div className="actions top">{actions}</div>
       {o.status === 'unresolved' && o.detail && <Detail d={o.detail} />}
       <h3>Lookup</h3>
       <dl>
@@ -242,9 +250,7 @@ function ResultCard({ r, onRerun, onEdit }) {
       </dl>
       <Evidence items={r.supporting_evidence} />
       <div className="actions">
-        <button onClick={() => onRerun(false)}>Rerun</button>
-        <button onClick={() => onRerun(true)}>Rerun fresh</button>
-        <button className="secondary" onClick={onEdit}>Edit &amp; rerun</button>
+        {actions}
         <button className="link" onClick={() => setRaw(!raw)}>{raw ? 'hide' : 'show'} JSON</button>
       </div>
       {raw && <pre>{JSON.stringify(r, null, 2)}</pre>}
@@ -446,8 +452,31 @@ function Observations({ openId, onEdit }) {
   const [rows, setRows] = useState([])
   const [onlyUnresolved, setOnly] = useState(false)
   const open = rows.find((r) => String(r._id) === openId) || null
+  const [retrying, setRetrying] = useState(false)  // one retry at a time
+  const [toast, setToast] = useState(null)        // { kind: 'busy'|'done'|'error', text, openId? }
   const setOpen = (r) => go('Observations', r?._id)
-  useEffect(() => { api.observations(onlyUnresolved ? 'unresolved' : '').then(setRows).catch(() => setRows([])) }, [onlyUnresolved])
+  const load = () => api.observations(onlyUnresolved ? 'unresolved' : '').then((xs) => { setRows(xs); return xs })
+    .catch(() => { setRows([]); return [] })
+  useEffect(() => { load() }, [onlyUnresolved])
+
+  // re-run the row's own request live (no_cache: a retry must never return the cached result it is retrying),
+  // then open the NEW observation; the old row stays as history. verify() has no _id, run_id is unique per call.
+  // lands on the list while it runs (closes the detail panel); the toast says when it's done and links the new row
+  const retry = async (r) => {
+    const what = `${r.brand} · ${r.product?.title || shortPath(r.product?.url)} · ${fmtOpts(r.requested_variant.options)}`
+    setRetrying(true); setOpen(null)
+    setToast({ kind: 'busy', text: `Retrying ${what}…` })
+    try {
+      const res = await api.verify({ brand: r.brand, url: r.product?.url, variant: r.requested_variant.options,
+        quantity: r.requested_variant.quantity || 1, no_cache: true })
+      const fresh = (await load()).find((x) => x.outcome.run_id === res.outcome.run_id)
+      const o = res.outcome
+      setToast({ kind: o.status === 'resolved' ? 'done' : 'error', openId: fresh?._id,
+        text: o.status === 'resolved' ? `Retry resolved: ${fmtMoney(res.current_amount, res.currency)} · ${what}`
+          : `Retry still unresolved (${(o.reason || '').replace(/_/g, ' ')}) · ${what}` })
+    } catch (ex) { setToast({ kind: 'error', text: `Retry failed: ${ex.message} · ${what}` }) }
+    finally { setRetrying(false) }
+  }
 
   return (
     <section className={open ? 'obs-grid' : ''}>
@@ -483,8 +512,13 @@ function Observations({ openId, onEdit }) {
       </div>
       {open && <aside className="side">
         <button className="close" aria-label="Close details" onClick={() => setOpen(null)}>×</button>
-        <ResultCard r={open} onRerun={() => onEdit(open)} onEdit={() => onEdit(open)} />
+        <ResultCard r={open} onRetry={() => retry(open)} retrying={retrying} onEdit={() => onEdit(open)} />
       </aside>}
+      {toast && <div className={`toast ${toast.kind}`} role="status" aria-live="polite">
+        <span>{toast.text}</span>
+        {toast.openId && <button className="link" onClick={() => { setOpen({ _id: toast.openId }); setToast(null) }}>View</button>}
+        {toast.kind !== 'busy' && <button className="link" aria-label="Dismiss" onClick={() => setToast(null)}>×</button>}
+      </div>}
     </section>
   )
 }

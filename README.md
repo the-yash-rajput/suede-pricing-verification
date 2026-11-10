@@ -4,6 +4,10 @@ Checks the **current public US/USD unit price of one exact variant**, with evide
 
 - [DESIGN.md](DESIGN.md): the architecture diagram (including the browser deep-dive) and design notes
 - [ROADMAP.md](ROADMAP.md): what to build next. DESIGN notes + ROADMAP total ≤500 words.
+  - **Month 1:** probe all 120 brands by volume; UCP fallback (from the observed 429); a shared Shopify request schedule; a fresh check before checkout; shadow mode.
+  - **Month 2:** adapters for the non-Shopify top 12; site-change detection; an ops queue with roles.
+  - **Month 3:** a shadow pilot of model-driven browsing on the long tail; proven brands skip ops review.
+  - **Deferred:** CAPTCHA solving.
 - [inputs.json](inputs.json): the chosen products and variants (quantity 1)
 
 ```

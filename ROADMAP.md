@@ -1,31 +1,30 @@
 # What I'd build next
 
-**What the prototype changed:** Nordic Knots and Serena & Lily are both headless Next.js, not Shopify, and Serena & Lily blocks plain HTTP. Shopify rate-limited us (`429`) across *unrelated* stores on the first request, so the shared budget and the cache matter more than I first assumed.
+**What the prototype changed:** Nordic Knots and Serena & Lily are headless Next.js, not Shopify, and Serena & Lily blocks plain HTTP. Shopify rate-limited us (`429`) across *unrelated* stores on the first request, so the shared budget and the cache matter more than I first assumed. `shopify_ucp` is only a label today: UCP isn't used yet.
 
-**Scaling:** probe every brand, onboard Shopify brands with config only, and write adapters for the non-Shopify top-12 brands.
+**Approach:** expand coverage through standard integrations, adapters chosen by volume, and model-driven browsing as an experiment. Accuracy and ops effort come before raw coverage.
 
-**Metrics** (targets are hypotheses, not baselines):
-- correctness against ops-labelled checks
-- coverage of proposal lines
-- % auto-resolved
-- p95 latency per method
-- cost per check
-- adapter breakages per month
-- ops minutes per unresolved
+## Scaling to 120 brands
+- **Standardize:** the Shopify adapter, UCP discovery, variant matching, pricing rules, evidence, the result format, rate limits, and the onboarding probe.
+- **Brand-specific:** selectors, variant mapping, site APIs, market/session handling.
+- **Top 12 (80% of volume):** dedicated adapters, ordered by purchase volume × current ops minutes.
+- **Long tail:** the generic Shopify adapter where possible; otherwise ops, plus the browsing pilot.
 
-**Before a brand skips human review:** shadow agreement with ops over a sample that includes sales and unavailable variants, plus zero wrong-variant results.
+## Metrics (targets set from month-1 data; none are Suede baselines)
+- Correctness against ops-labelled checks.
+- Coverage of proposal lines and % auto-resolved.
+- p95 latency and cost per check.
+- Adapter breakages per month and ops minutes per unresolved.
 
-| Month | Ship | Test | Evidence to expand |
-|---|---|---|---|
-| 1 | Shared Shopify budget, cache, mandatory pre-checkout refresh (from the observed 429); all Shopify brands in shadow mode | Ops ground truth per brand | Agreement holds across sale events |
-| 2 | Custom adapters for the top-12 non-Shopify brands; site-change detection and auto-demote | Spot-check the browser path against cheap sources | Low breakage rate |
-| 3 | Sweep of open proposals; ops queue; shipping as a new check type | Cost per check | Ops minutes falling |
+**A brand skips ops review only after** shadow agreement with ops over a sample that includes sales and unavailable variants, with zero wrong-variant results.
 
-**Deferred:** West Elm and bot-protected sites, and LLM-directed browsing, until the cheaper paths are saturated.
+## 3 months
+| Month | Ship | Evidence to expand |
+|---|---|---|
+| 1 | Probe all 120 brands and weight the results by volume (does "70% Shopify" hold for the top 12?). UCP `catalog.lookup` as a fallback and cross-check for `.js` (from the 429). Request scheduling and dedup of simultaneous checks inside the shared Shopify budget. Fresh check required before checkout. Everything in shadow mode against ops. | Agreement holds across sale events |
+| 2 | Adapters for the non-Shopify top 12. Site-change detection that sends a breaking brand back to ops. An ops queue (unresolved results, evidence, resolve/label, brand config) with ops/admin roles. | Low breakage, fewer ops minutes |
+| 3 | Browser Use pilot on long-tail browser brands, shadow only: no login, no codes, no CAPTCHA bypass. Promote brands that pass. Proven brands skip routine ops review. | Agreement under the same gate |
 
-**After month 3:**
-- UCP `catalog.lookup` as the fallback when `.js` is rate-limited, and as a second source to cross-check against.
-- CAPTCHA/bot-wall handling for sites like Serena & Lily: a solver service, only where the brand's terms allow it.
-- Model-directed browsing (e.g. Browser Use) for flows Playwright can't settle. It may select variants and read prices; it stops and hands off to ops on any login, checkout or uncertain match.
-- Auth (ops/admin roles) and an admin panel for brands, adapters and limits.
-- Separate backend and frontend repos; UI polish.
+**Deferred:**
+- CAPTCHA-solving services, because of terms-of-service, reliability and brand-relationship risk. Use affiliate feeds, Shopify Collective or partner integrations instead.
+- Separate repos and standalone UI polish.
