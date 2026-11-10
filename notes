@@ -170,6 +170,19 @@ Candidate brands (named on suedehome.com, read 2026-11-10):
 - [ ] Optional: find a King/Cal King color in stock, to show a successful second-size lookup.
 - [ ] Try UCP `catalog.lookup` on L&G as the structured source (and as a fallback while `.js` is rate-limited).
 
+## West Elm check (live, 2026-11-10 22:00–22:03 UTC, from India)
+- Probe (plain HTTP): 403 "West Elm: 403 - Restricted Access", `server: AkamaiNetStorage`, on `/products/harmony-sofa-h2875/`, `/products/harmony-sofa-h2875.js` and `/.well-known/ucp`. → custom/browser, headed, `bot_vendor=akamai`.
+- One headed Chromium navigation (run `r-20261110T220157Z-062e09`): the same 403 page, "due to website restrictions we are unable to display the requested page". Cookies: AAABON, WSGEO, WSPFY, pageLoadTime, utag_main. No `_abck`/`bm_sz`. I first read this as a geo block. **Wrong:** see the manual check below.
+- Manual check in the user's regular Chrome (same IP, ~22:05 UTC):
+  - Pages render. India gets a "Looks like you're in India / proceed to the US site" popup, not a 403.
+  - `harmony-sofa-h2875` (a URL I guessed) redirects to the homepage, so it was not a real product.
+  - Real product: Pre-Lit Faux Citrus Garland `/products/citrus-garland-d18933/`. Select Size 5' = $129, 8' = $159 (rendered price after clicking each).
+  - JSON-LD Product.offers is an AggregateOffer in USD with SKUs 9321690=$129 and 7423483=$159, no size names.
+  - Vue app (`__INITIAL_STATE__`); reCAPTCHA scripts are present.
+- Automated run on the real URL (run `r-20261110T220718Z-15527b`): 403 again → the automated browser is refused, not the IP/country.
+- Retry limit verified: the second run returned "brand paused…; site NOT contacted". Clearing the throttle row → contacted again → blocked → paused again.
+- Not done on purpose: CAPTCHA solving / evasion. Price extraction not built (page never rendered).
+
 ## Nordic Knots verified live (2026-11-11), Grand – Milano Green 5'x8'
 - URL: https://nordicknots.com/us/product/grand-milano-green/5x8 (user's link, ad-tracking params dropped).
 - JSON-LD Product offers keyed by `size` (no offer name): 5'x8' 995 · 6'x9' 1295 · 8'x8' 1695 · 8'x10' 1895 · 9'x12' 2595 · 10'x10' 2295 · 10'x14' 3395 · 12'x15', all `priceCurrency: USD`.

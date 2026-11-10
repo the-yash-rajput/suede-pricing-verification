@@ -81,6 +81,7 @@ Every result has exactly the brief's 11 top-level fields, in this order:
 |---|---|---|---|
 | Lulu and Georgia | `shopify_ucp`: generic adapter, config only | exact option match in `/products/<handle>.js` → variant id; the page opened at `?variant=<id>` must select the same id | JSON price (cents) must equal the rendered page price; `Shopify.currency.active`/`Shopify.country` must be USD/US |
 | Serena & Lily | `custom/browser` (curl 403, browser OK) | options → child product id from the page's embedded JSON; navigate there and **re-read** the selected options | embedded sale/list cents must equal the rendered sale price; "Save X%" list price → compare-at; Affirm $/mo ignored |
+| West Elm (optional) | `custom/browser`, headed, Akamai | not reached: blocked on the first navigation | not reached: returns `bot_blocked` with evidence and pauses the brand (see below) |
 | Nordic Knots | `custom/browser` (Next.js + Centra cart) | JSON-LD offer by exact `size`; if the page shows another size, pick it in the size listbox and **re-read** the picker + URL | JSON-LD amount must equal the rendered `[aria-live]` price; currency/market come from the **Centra session** (`/api/checkout/selection`), not the `/us` path |
 
 ## Example results
@@ -106,7 +107,31 @@ Every result has exactly the brief's 11 top-level fields, in this order:
   Observed 2026-11-11 (run `r-20261110T203840Z-2e19ea`): headed Chromium on Xvfb was **still blocked**. DataDome's page names our IP ("uncommon activity… IP 157.49.55.86") after the earlier runs, so it is an IP flag, not a headless fingerprint. The result is `unresolved: bot_blocked` after **one** attempt, with `blocked.png` and the body as evidence. Ops checks the price by hand and re-runs after the flag clears. No evasion.
 - **Membership and promo detection** is a text heuristic on the page. It flags; it never changes the amount.
 - **Cache TTL (15 min) and cooldown (120 s)** are hypotheses.
-- Shipping and West Elm are deferred.
+- Shipping is deferred. West Elm is attempted, but blocked from our egress (see below).
+
+## West Elm (optional harder brand)
+Live, 2026-11-10 22:00–22:08 UTC, from India. Product: Pre-Lit Faux Citrus Garland, `https://www.westelm.com/products/citrus-garland-d18933/`, requested `Size: 8'`.
+
+- **What was retrieved, by a manual check in a regular Chrome (not a prototype run):**
+  - Size 5' is **$129** and 8' is **$159**, read from the rendered price after selecting each size.
+  - The JSON-LD `AggregateOffer` is USD, with offer SKUs 9321690 ($129) and 7423483 ($159). The offers carry no size names, so the size-to-SKU link comes from the price.
+  - India visitors get a "proceed to the US site" popup, not a 403.
+- **What the prototype retrieved:** nothing about the product. The onboarding probe (plain HTTP) got **403 "West Elm: 403 - Restricted Access"** with `server: AkamaiNetStorage` on the page, `/products/<handle>.js` and `/.well-known/ucp`. It proposed `custom/browser`, `headed=true`, `bot_vendor=akamai`.
+- **Blocker evidence:**
+  - Run `r-20261110T220718Z-15527b`, one headed Chromium navigation to the garland URL. It got the same 403 page ("due to website restrictions we are unable to display the requested page"). Evidence is `blocked.png`, `body.txt` and the cookie names.
+  - A regular Chrome on the **same IP** is served, so this is the automated browser being refused, not a country block.
+  - Correction: earlier runs (`r-20261110T2201…`, `…2202…`) used a product URL I guessed, which redirects to the homepage in a real browser. I first misread those runs as a geo block.
+- **How retries are limited:**
+  - A block costs exactly **one** navigation: `bot_blocked` is not a retryable error.
+  - `service.verify` then **pauses the brand** for 6h (a hypothesis; per brand via `config.bot_cooldown_seconds`), using the same `throttle` table as 429 cooldowns.
+  - Run `r-20261110T220223Z-3f5a42` (guessed URL; the pause is per domain, so that doesn't matter here) shows the next request returning `bot_blocked: brand paused…; site NOT contacted`, with `retry_after_seconds`.
+- **Handoff:** the result's `handoff` tells ops to open the URL in a normal browser, select the variant, and record the price and a screenshot against the run_id. The UI shows this as "Ops action".
+- **Resume:**
+  - The pause ends on its own, or ops ends it early with `DELETE FROM throttle WHERE scope = 'domain:www.westelm.com'` and reruns with `--no-cache`.
+  - Run `r-20261110T220233Z-34cc0d` shows this: the site was contacted again, blocked again, and paused again.
+  - The durable fix is a sanctioned source: a brand catalog feed, an affiliate API, or allowlisting.
+- **Deliberately not done:** no CAPTCHA solving, no proxy rotation, no fingerprint evasion. The brief says unattended completion isn't required, and as buyer of record Suede shouldn't depend on circumventing a retailer's bot protection.
+- **Not built:** the price extraction, because the prototype never saw the page. The manual check shows what it would be: JSON-LD offer by SKU, then select the size, re-read "Select Size", and cross-check the rendered price. If the page ever renders for the prototype, the adapter saves the JSON-LD and a screenshot and returns `site_error` ("extraction not built"). It never guesses a price.
 
 ## Time spent
 _TBD by the author._

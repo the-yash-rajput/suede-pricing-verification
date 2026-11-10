@@ -20,7 +20,8 @@ from .core import now_iso
 CHALLENGE = re.compile(r"just a moment|cf-chl|captcha|access denied|px-captcha|are you a human", re.I)
 BOT_VENDORS = {"datadome": re.compile(r"captcha-delivery\.com|x-datadome", re.I),
                "cloudflare": re.compile(r"cf-chl|just a moment", re.I),
-               "perimeterx": re.compile(r"px-captcha|perimeterx", re.I)}
+               "perimeterx": re.compile(r"px-captcha|perimeterx", re.I),
+               "akamai": re.compile(r"_abck|bm_sz|ak_bmsc|errors\.edgesuite\.net|akamai", re.I)}
 
 
 def _get(url: str, timeout=15) -> dict:

@@ -110,6 +110,13 @@ def cooldown_remaining(scope: str) -> int:
     return max(0, int((row["cooldown_until"] - datetime.now(timezone.utc)).total_seconds()))
 
 
+def cooldown_status(scope: str) -> str | None:
+    """Why the scope is cooling down: '429' (rate limit) or 'bot_blocked' (brand paused)."""
+    with connect() as c:
+        row = c.execute("SELECT last_status FROM throttle WHERE scope = %s", (scope,)).fetchone()
+    return row["last_status"] if row else None
+
+
 def set_cooldown(scope: str, seconds: int, status: str):
     until = datetime.now(timezone.utc) + timedelta(seconds=seconds)
     with connect() as c:

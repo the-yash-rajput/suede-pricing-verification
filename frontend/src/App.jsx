@@ -254,7 +254,9 @@ function ResultCard({ r, onRerun, onEdit }) {
 }
 
 const DETAIL_LABELS = { note: 'Note', error: 'Error', attempts: 'Attempts', scope: 'Scope', resume: 'Resumes',
-  retry_after_seconds: 'Retry after', requested: 'Requested', valid_options: 'Valid options' }
+  retry_after_seconds: 'Retry after', requested: 'Requested', valid_options: 'Valid options', status: 'HTTP status',
+  vendor: 'Vendor', page_title: 'Page title', suspected_cause: 'Suspected cause', next_test: 'Next test',
+  brand_paused_seconds: 'Brand paused for' }
 
 // outcome.detail is free-form per reason; render known shapes, never a raw JSON dump
 function Detail({ d }) {

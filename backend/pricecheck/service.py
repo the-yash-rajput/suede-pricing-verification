@@ -10,12 +10,15 @@ import time
 import traceback
 
 from . import db
-from .core import (NO_ADAPTER, RATE_LIMITED, SITE_ERROR, VARIANT_NOT_FOUND, Evidence, RateLimited, Request,
+from .core import (BOT_BLOCKED, NO_ADAPTER, RATE_LIMITED, SITE_ERROR, VARIANT_NOT_FOUND, Evidence, RateLimited, Request,
                    Transient, new_run_id, now_iso, unresolved, validate)
 
 MAX_ATTEMPTS = 3          # 1 try + 2 retries, transient errors only
 DEFAULT_TTL = 900         # ponytail: 15 min cache TTL is a hypothesis; per-brand override via brands.config.ttl_seconds
 DEFAULT_COOLDOWN = 120    # after a 429 when the site gives no Retry-After
+BOT_PAUSE = 21600         # ponytail: 6h brand pause after a bot block is a hypothesis; per-brand config.bot_cooldown_seconds
+HANDOFF = ("ops: open the product URL in a normal browser, select the requested variant, record the current price + "
+           "screenshot against this run_id")
 
 
 def cache_key(req: Request, market: str = "US") -> str:
@@ -50,6 +53,13 @@ def verify(req: Request, *, no_cache: bool = False, run_id: str | None = None) -
 
     scope = cfg.get("rate_scope") or f"domain:{brand['domain']}"
     wait = db.cooldown_remaining(scope)
+    if wait and db.cooldown_status(scope) == BOT_BLOCKED:
+        # one bot block pauses the whole brand: retrying from a flagged IP only extends the flag
+        return _finish(req, unresolved(req, BOT_BLOCKED, {
+            "note": "brand paused after a bot block; site NOT contacted", "scope": scope,
+            "retry_after_seconds": wait, "handoff": HANDOFF,
+            "resume": f"automatic when the pause ends, or ops: DELETE FROM throttle WHERE scope = '{scope}', "
+                      "then rerun with --no-cache"}, run_id))
     if wait:
         return _finish(req, unresolved(req, RATE_LIMITED, {"scope": scope, "retry_after_seconds": wait,
                                                            "note": "cooldown active from an earlier 429"}, run_id))
@@ -63,7 +73,13 @@ def verify(req: Request, *, no_cache: bool = False, run_id: str | None = None) -
             obs = adapter.fetch(req, brand, ev)
             obs.evidence = ev.items
             obs.source.setdefault("attempts", attempt)
-            return _finish(req, validate(req, obs, run_id, observed_at), key)
+            r = validate(req, obs, run_id, observed_at)
+            if r["outcome"]["reason"] == BOT_BLOCKED:
+                pause = cfg.get("bot_cooldown_seconds", BOT_PAUSE)
+                db.set_cooldown(scope, pause, BOT_BLOCKED)
+                r["outcome"]["detail"] = {**(r["outcome"]["detail"] or {}), "handoff": HANDOFF,
+                                          "brand_paused_seconds": pause, "scope": scope}
+            return _finish(req, r, key)
         except RateLimited as e:
             db.set_cooldown(e.scope, e.retry_after, "429")
             return _finish(req, unresolved(req, RATE_LIMITED, {"scope": e.scope, "retry_after_seconds": e.retry_after},

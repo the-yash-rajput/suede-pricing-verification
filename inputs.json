@@ -19,5 +19,12 @@
     "variant": {"Size": "5'x8'"},
     "quantity": 1,
     "why": "Custom (headless Next.js + Centra). Price varies by size ($995-$3,395). Market comes from the Centra session, not the /us path."
+  },
+  {
+    "brand": "West Elm",
+    "url": "https://www.westelm.com/products/citrus-garland-d18933/",
+    "variant": {"Size": "8'"},
+    "quantity": 1,
+    "why": "Optional harder brand: Williams-Sonoma stack behind Akamai (403 to plain HTTP). Shows blocker evidence, one attempt, brand pause and ops handoff. Pre-Lit Faux Citrus Garland: Size 5' $129, 8' $159 (manual Chrome check, JSON-LD AggregateOffer, USD)."
   }
 ]
