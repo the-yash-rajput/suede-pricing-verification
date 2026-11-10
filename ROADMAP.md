@@ -22,3 +22,10 @@
 | 3 | Sweep of open proposals; ops queue; shipping as a new check type | Cost per check | Ops minutes falling |
 
 **Deferred:** West Elm and bot-protected sites, and LLM-directed browsing, until the cheaper paths are saturated.
+
+**After month 3:**
+- UCP `catalog.lookup` as the fallback when `.js` is rate-limited, and as a second source to cross-check against.
+- CAPTCHA/bot-wall handling for sites like Serena & Lily: a solver service, only where the brand's terms allow it.
+- Model-directed browsing (e.g. Browser Use) for flows Playwright can't settle. It may select variants and read prices; it stops and hands off to ops on any login, checkout or uncertain match.
+- Auth (ops/admin roles) and an admin panel for brands, adapters and limits.
+- Separate backend and frontend repos; UI polish.
